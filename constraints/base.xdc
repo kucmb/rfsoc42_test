@@ -4,19 +4,19 @@
 ## Constraints file for RFSoC4x2 base overlay Vivado project
 
 # SYSREF for PL (7.68 MHz)
-set_property PACKAGE_PIN AP18 [get_ports sysref_fpga_p]
-set_property IOSTANDARD LVDS [get_ports sysref_fpga_p]
-set_property EQUALIZATION EQ_LEVEL0 [get_ports sysref_fpga_p]
-set_property DQS_BIAS TRUE [get_ports sysref_fpga_p]
-set_property DIFF_TERM FALSE [get_ports sysref_fpga_p]
+set_property PACKAGE_PIN AP18 [get_ports sysref_fpga_clk_p]
+set_property IOSTANDARD LVDS [get_ports sysref_fpga_clk_p]
+set_property EQUALIZATION EQ_LEVEL0 [get_ports sysref_fpga_clk_p]
+set_property DQS_BIAS TRUE [get_ports sysref_fpga_clk_p]
+set_property DIFF_TERM FALSE [get_ports sysref_fpga_clk_p]
 
 # Reference clock to FPGA (122.88 MHz)
 # This clock is synchronized to ADC/DAC clocks.
-set_property PACKAGE_PIN AN11 [get_ports fpga_refclk_p]
-set_property IOSTANDARD LVDS [get_ports fpga_refclk_p]
-set_property EQUALIZATION EQ_LEVEL0 [get_ports fpga_refclk_p]
-set_property DQS_BIAS TRUE [get_ports fpga_refclk_p]
-set_property DIFF_TERM FALSE [get_ports fpga_refclk_p]
+set_property PACKAGE_PIN AN11 [get_ports fpga_refclk_clk_p]
+set_property IOSTANDARD LVDS [get_ports fpga_refclk_clk_p]
+set_property EQUALIZATION EQ_LEVEL0 [get_ports fpga_refclk_clk_p]
+set_property DQS_BIAS TRUE [get_ports fpga_refclk_clk_p]
+set_property DIFF_TERM FALSE [get_ports fpga_refclk_clk_p]
 
 # 156.25 MHz USER_MGT_SI570_CLOCK - CMAC input clock
 set_property PACKAGE_PIN AA34      [get_ports "diff_clock_rtl_clk_n"] ;# Bank 128 - MGTREFCLK0N_128 RFSoC4x2 GT CLK
@@ -251,6 +251,3 @@ set_property PACKAGE_PIN B9			    [get_ports {syzygy_std0_tri_io[31]}];  # C2P_C
 
 set_property IOSTANDARD LVCMOS18        [get_ports -of_objects [get_iobanks 84]];
 set_property IOSTANDARD LVCMOS18        [get_ports -of_objects [get_iobanks 87]];
-
-set_property BITSTREAM.GENERAL.COMPRESS TRUE [get_designs impl_1]
-set_property BITSTREAM.CONFIG.OVERTEMPSHUTDOWN ENABLE [get_designs impl_1]

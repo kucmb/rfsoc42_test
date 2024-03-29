@@ -20,6 +20,7 @@ add_files -fileset constrs_1 -norecurse {\
 set_property  ip_repo_paths  {\
     ../axi_ddc_oct \
     ../RFSoC-PYNQ/boards/ip \
+    ../dds_hls \
 } [current_project]
 
 #set_property ip_repo_paths $lib_dirs [current_fileset]
@@ -196,7 +197,10 @@ set util_ds_buf_sysref [create_bd_cell -type ip -vlnv [latest_ip util_ds_buf] ut
 set_property -dict [ list \
     CONFIG.C_BUF_TYPE {IBUFDS} \
 ] $util_ds_buf_sysref
-set sysref_cdc [create_bd_cell -type ip -vlnv [latest_ip xpm_cdc_gen] sysref_cdc]
+set sysref_cdc_adc [create_bd_cell -type ip -vlnv [latest_ip xpm_cdc_gen] sysref_cdc_dac]
+set sysref_cdc_dac [create_bd_cell -type ip -vlnv [latest_ip xpm_cdc_gen] sysref_cdc_adc]
+set_property CONFIG.CDC_TYPE {xpm_cdc_single} [get_bd_cells sysref_cdc_adc]
+set_property CONFIG.CDC_TYPE {xpm_cdc_single} [get_bd_cells sysref_cdc_dac]
 
 # constant for clock pin
 set xlconstant_0 [create_bd_cell -type ip -vlnv [latest_ip xlconstant] xlconstant_0]
@@ -248,7 +252,7 @@ set sys_rstgen [create_bd_cell -type ip -vlnv [latest_ip proc_sys_reset] sys_rst
 
 set interconnect_cpu [ create_bd_cell -type ip -vlnv [latest_ip axi_interconnect] interconnect_cpu ]
 set_property -dict [ list \
-    CONFIG.NUM_MI {2} \
+    CONFIG.NUM_MI {3} \
     CONFIG.S00_HAS_DATA_FIFO {2} \
 ] $interconnect_cpu
 
@@ -268,6 +272,18 @@ set_property -dict [ list \
    CONFIG.ENABLE_RESET {false} \
    CONFIG.INTERFACE_SELECTION {Enable_AXI} \
  ] $system_management_wiz
+
+## ILA for ADC monitor
+set system_ila [ create_bd_cell -type ip -vlnv [latest_ip system_ila] system_ila ]
+set_property -dict [list \
+  CONFIG.C_NUM_MONITOR_SLOTS {2} \
+  CONFIG.C_SLOT {1} \
+  CONFIG.C_SLOT_0_INTF_TYPE {xilinx.com:interface:axis_rtl:1.0} \
+  CONFIG.C_SLOT_1_INTF_TYPE {xilinx.com:interface:axis_rtl:1.0} \
+] $system_ila
+
+## DDS HLS
+set dds_hls [ create_bd_cell -type ip -vlnv [latest_ip dds_hls] dds_hls ]
 
 
 ############## Connection
@@ -376,17 +392,33 @@ connect_bd_net -net $sys_cpu_clk [get_bd_pins rfdc/s_axi_aclk]
 connect_bd_net -net $sys_cpu_resetn [get_bd_pins rfdc/s_axi_aresetn]
 connect_bd_intf_net [get_bd_intf_pins interconnect_cpu/M01_AXI] [get_bd_intf_pins rfdc/s_axi]
 
+# System ILA
+connect_bd_net -net $adc_stream_clk [get_bd_pins system_ila/clk]
+connect_bd_net -net $adc_stream_resetn [get_bd_pins system_ila/resetn]
+connect_bd_intf_net [get_bd_intf_pins rfdc/m00_axis] [get_bd_intf_pins system_ila/SLOT_0_AXIS]
+connect_bd_intf_net [get_bd_intf_pins rfdc/m02_axis] [get_bd_intf_pins system_ila/SLOT_1_AXIS]
+
+# DDS HLS
+connect_bd_intf_net [get_bd_intf_pins dds_hls/m_axis_data_i] [get_bd_intf_pins rfdc/s00_axis]
+connect_bd_intf_net [get_bd_intf_pins dds_hls/m_axis_data_q] [get_bd_intf_pins rfdc/s20_axis]
+connect_bd_intf_net -boundary_type upper [get_bd_intf_pins interconnect_cpu/M02_AXI] [get_bd_intf_pins dds_hls/s_axi_control]
+connect_bd_net -net $dac_stream_clk [get_bd_pins dds_hls/ap_clk] 
+connect_bd_net -net $dac_stream_resetn [get_bd_pins dds_hls/ap_rst_n] 
+connect_bd_net -net $sys_cpu_resetn [get_bd_pins dds_hls/ap_rst_n_s_axi_aclk]
+connect_bd_net -net $sys_cpu_clk [get_bd_pins dds_hls/s_axi_aclk]
 
 # Interconnect for AXI peripheral control
 connect_bd_net -net $sys_cpu_clk [get_bd_pins interconnect_cpu/ACLK]
 connect_bd_net -net $sys_cpu_clk [get_bd_pins interconnect_cpu/S00_ACLK]
 connect_bd_net -net $sys_cpu_clk [get_bd_pins interconnect_cpu/M00_ACLK]
 connect_bd_net -net $sys_cpu_clk [get_bd_pins interconnect_cpu/M01_ACLK]
+connect_bd_net -net $sys_cpu_clk [get_bd_pins interconnect_cpu/M02_ACLK]
 
 connect_bd_net -net $sys_cpu_resetn [get_bd_pins interconnect_cpu/ARESETN]
 connect_bd_net -net $sys_cpu_resetn [get_bd_pins interconnect_cpu/S00_ARESETN]
 connect_bd_net -net $sys_cpu_resetn [get_bd_pins interconnect_cpu/M00_ARESETN]
 connect_bd_net -net $sys_cpu_resetn [get_bd_pins interconnect_cpu/M01_ARESETN]
+connect_bd_net -net $sys_cpu_resetn [get_bd_pins interconnect_cpu/M02_ARESETN]
 
 connect_bd_intf_net [get_bd_intf_pins zynq_ultra_ps_e_0/M_AXI_HPM0_LPD] [get_bd_intf_pins interconnect_cpu/S00_AXI]
 
@@ -426,14 +458,17 @@ connect_bd_net [get_bd_pins clk_wiz_str/reset] [get_bd_pins clk_mmcm_reset/Res]
 connect_bd_net [get_bd_pins binary_latch_counter_0/latched] [get_bd_pins clk_mmcm_reset/Op1]
 
 # pl sysref
-connect_bd_net -net $dac_stream_clk [get_bd_pins sysref_cdc/dest_clk]
+connect_bd_net -net $dac_stream_clk [get_bd_pins sysref_cdc_dac/dest_clk]
+connect_bd_net -net $adc_stream_clk [get_bd_pins sysref_cdc_adc/dest_clk]
 connect_bd_intf_net [get_bd_intf_ports sysref_fpga] [get_bd_intf_pins util_ds_buf_sysref/CLK_IN_D]
-connect_bd_net [get_bd_pins util_ds_buf_sysref/IBUF_OUT] [get_bd_pins sysref_cdc/src_in]
-connect_bd_net [get_bd_pins sysref_cdc/dest_out] [get_bd_pins rfdc/user_sysref_adc]
-connect_bd_net [get_bd_pins sysref_cdc/dest_out] [get_bd_pins rfdc/user_sysref_dac]
+connect_bd_net [get_bd_pins util_ds_buf_sysref/IBUF_OUT] [get_bd_pins sysref_cdc_dac/src_in]
+connect_bd_net [get_bd_pins util_ds_buf_sysref/IBUF_OUT] [get_bd_pins sysref_cdc_adc/src_in]
+connect_bd_net [get_bd_pins sysref_cdc_adc/dest_out] [get_bd_pins rfdc/user_sysref_adc]
+connect_bd_net [get_bd_pins sysref_cdc_dac/dest_out] [get_bd_pins rfdc/user_sysref_dac]
 
 
-connect_bd_net [get_bd_pins xlconstant_0/dout] [get_bd_pins sysref_cdc/src_clk]
+connect_bd_net [get_bd_pins xlconstant_0/dout] [get_bd_pins sysref_cdc_adc/src_clk]
+connect_bd_net [get_bd_pins xlconstant_0/dout] [get_bd_pins sysref_cdc_dac/src_clk]
 
 # System management wiz
 connect_bd_intf_net [get_bd_intf_ports Vp_Vn] [get_bd_intf_pins system_management_wiz/Vp_Vn]
@@ -447,7 +482,9 @@ assign_bd_address -offset 0x001000000000 -range 0x000200000000 -target_address_s
 #assign_bd_address -offset 0x001000000000 -range 0x000200000000 -target_address_space [get_bd_addr_spaces axi_dma/Data_S2MM] [get_bd_addr_segs ddr4_0/C0_DDR4_MEMORY_MAP/C0_DDR4_ADDRESS_BLOCK] -force
 
 assign_bd_address -offset 0x80000000 -range 0x00010000 -target_address_space [get_bd_addr_spaces zynq_ultra_ps_e_0/Data] [get_bd_addr_segs system_management_wiz/S_AXI_LITE/Reg] -force
+assign_bd_address -offset 0x80010000 -range 0x00010000 -target_address_space [get_bd_addr_spaces zynq_ultra_ps_e_0/Data] [get_bd_addr_segs dds_hls/s_axi_control/Reg] -force
 assign_bd_address -offset 0x80080000 -range 0x00040000 -target_address_space [get_bd_addr_spaces zynq_ultra_ps_e_0/Data] [get_bd_addr_segs rfdc/s_axi/Reg] -force
+
 
 ### Project
 save_bd_design
