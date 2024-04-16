@@ -1,0 +1,3 @@
+[submodule "python/mtspy"]
+	path = python/mtspy
+	url = git@github.com:kucmb/mtspy.git
