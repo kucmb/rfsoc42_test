@@ -1,4 +1,4 @@
-set zynq_ultra_ps_e_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:zynq_ultra_ps_e:3.4 zynq_ultra_ps_e_0 ]
+set zynq_ultra_ps_e_0 [ create_bd_cell -type ip -vlnv [latest_ip zynq_ultra_ps_e] zynq_ultra_ps_e_0 ]
 set_property -dict [ list \
    CONFIG.CAN0_BOARD_INTERFACE {custom} \
    CONFIG.CAN1_BOARD_INTERFACE {custom} \

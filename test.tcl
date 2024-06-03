@@ -179,18 +179,24 @@ set_property -dict [list \
   CONFIG.CLKOUT2_PHASE_ERROR {100.322} \
   CONFIG.CLKOUT2_REQUESTED_OUT_FREQ {307.2} \
   CONFIG.CLKOUT2_USED {true} \
+  CONFIG.CLKOUT3_JITTER {126.231} \
+  CONFIG.CLKOUT3_PHASE_ERROR {100.322} \
+  CONFIG.CLKOUT3_REQUESTED_OUT_FREQ {102.4} \
+  CONFIG.CLKOUT3_USED {true} \
   CONFIG.MMCM_CLKFBOUT_MULT_F {7.500} \
   CONFIG.MMCM_CLKIN1_PERIOD {8.138} \
   CONFIG.MMCM_CLKIN2_PERIOD {10.0} \
   CONFIG.MMCM_CLKOUT0_DIVIDE_F {2.250} \
   CONFIG.MMCM_CLKOUT1_DIVIDE {3} \
+  CONFIG.MMCM_CLKOUT2_DIVIDE {9} \
   CONFIG.MMCM_DIVCLK_DIVIDE {1} \
-  CONFIG.NUM_OUT_CLKS {2} \
+  CONFIG.NUM_OUT_CLKS {3} \
   CONFIG.PRIM_IN_FREQ {122.88} \
   CONFIG.PRIM_SOURCE {Differential_clock_capable_pin} \
 ] $clk_wiz_str
 set adc_stream_reset [create_bd_cell -type ip -vlnv [latest_ip proc_sys_reset] adc_stream_reset]
 set dac_stream_reset [create_bd_cell -type ip -vlnv [latest_ip proc_sys_reset] dac_stream_reset]
+set sys_stream_reset [create_bd_cell -type ip -vlnv [latest_ip proc_sys_reset] sys_stream_reset]
 
 ### PL sysref 
 set util_ds_buf_sysref [create_bd_cell -type ip -vlnv [latest_ip util_ds_buf] util_ds_buf_sysref]
@@ -199,8 +205,19 @@ set_property -dict [ list \
 ] $util_ds_buf_sysref
 set sysref_cdc_adc [create_bd_cell -type ip -vlnv [latest_ip xpm_cdc_gen] sysref_cdc_dac]
 set sysref_cdc_dac [create_bd_cell -type ip -vlnv [latest_ip xpm_cdc_gen] sysref_cdc_adc]
-set_property CONFIG.CDC_TYPE {xpm_cdc_single} [get_bd_cells sysref_cdc_adc]
-set_property CONFIG.CDC_TYPE {xpm_cdc_single} [get_bd_cells sysref_cdc_dac]
+set_property CONFIG.CDC_TYPE {xpm_cdc_single} $sysref_cdc_adc
+set_property CONFIG.CDC_TYPE {xpm_cdc_single} $sysref_cdc_dac
+set_property -dict [list \
+  CONFIG.DEST_SYNC_FF {2} \
+  CONFIG.INIT_SYNC_FF {true} \
+  CONFIG.SRC_INPUT_REG {false} \
+] $sysref_cdc_adc
+set_property -dict [list \
+  CONFIG.DEST_SYNC_FF {2} \
+  CONFIG.INIT_SYNC_FF {true} \
+  CONFIG.SRC_INPUT_REG {false} \
+] $sysref_cdc_dac
+
 
 # constant for clock pin
 set xlconstant_0 [create_bd_cell -type ip -vlnv [latest_ip xlconstant] xlconstant_0]
@@ -299,6 +316,10 @@ connect_bd_net -net $adc_stream_clk [get_bd_pins clk_wiz_str/clk_out1]
 set dac_stream_clk [create_bd_net dac_stream_clk]
 connect_bd_net -net $dac_stream_clk [get_bd_pins clk_wiz_str/clk_out2]
 
+# AXI Lite clock for DDS HLS (102.4 MHz)
+set sys_stream_clk [create_bd_net sys_stream_clk]
+connect_bd_net -net $sys_stream_clk [get_bd_pins clk_wiz_str/clk_out3]
+
 # DDR4
 set ddr4_clk [create_bd_net ddr4_clk]
 connect_bd_intf_net [get_bd_intf_ports sys_clk_ddr4] [get_bd_intf_pins util_ds_buf_0/CLK_IN_D]
@@ -335,6 +356,12 @@ set dac_stream_resetn [create_bd_net dac_stream_resetn]
 connect_bd_net -net $pl_resetn [get_bd_pins dac_stream_reset/ext_reset_in]
 connect_bd_net -net $dac_stream_clk [get_bd_pins dac_stream_reset/slowest_sync_clk]
 connect_bd_net -net $dac_stream_resetn [get_bd_pins dac_stream_reset/peripheral_aresetn]
+
+# Reset for AXI Lite clock (used in DDS HLS) (102.4 MHz)
+set sys_stream_resetn [create_bd_net sys_stream_resetn]
+connect_bd_net -net $pl_resetn [get_bd_pins sys_stream_reset/ext_reset_in]
+connect_bd_net -net $sys_stream_clk [get_bd_pins sys_stream_reset/slowest_sync_clk]
+connect_bd_net -net $sys_stream_resetn [get_bd_pins sys_stream_reset/peripheral_aresetn]
 
 # Peripheral reset
 set sys_cpu_reset [create_bd_net sys_cpu_reset]
@@ -404,21 +431,21 @@ connect_bd_intf_net [get_bd_intf_pins dds_hls/m_axis_data_q] [get_bd_intf_pins r
 connect_bd_intf_net -boundary_type upper [get_bd_intf_pins interconnect_cpu/M02_AXI] [get_bd_intf_pins dds_hls/s_axi_control]
 connect_bd_net -net $dac_stream_clk [get_bd_pins dds_hls/ap_clk] 
 connect_bd_net -net $dac_stream_resetn [get_bd_pins dds_hls/ap_rst_n] 
-connect_bd_net -net $sys_cpu_resetn [get_bd_pins dds_hls/ap_rst_n_s_axi_aclk]
-connect_bd_net -net $sys_cpu_clk [get_bd_pins dds_hls/s_axi_aclk]
+connect_bd_net -net $sys_stream_resetn [get_bd_pins dds_hls/ap_rst_n_s_axi_aclk]
+connect_bd_net -net $sys_stream_clk [get_bd_pins dds_hls/s_axi_aclk]
 
 # Interconnect for AXI peripheral control
 connect_bd_net -net $sys_cpu_clk [get_bd_pins interconnect_cpu/ACLK]
 connect_bd_net -net $sys_cpu_clk [get_bd_pins interconnect_cpu/S00_ACLK]
 connect_bd_net -net $sys_cpu_clk [get_bd_pins interconnect_cpu/M00_ACLK]
 connect_bd_net -net $sys_cpu_clk [get_bd_pins interconnect_cpu/M01_ACLK]
-connect_bd_net -net $sys_cpu_clk [get_bd_pins interconnect_cpu/M02_ACLK]
+connect_bd_net -net $sys_stream_clk [get_bd_pins interconnect_cpu/M02_ACLK]
 
 connect_bd_net -net $sys_cpu_resetn [get_bd_pins interconnect_cpu/ARESETN]
 connect_bd_net -net $sys_cpu_resetn [get_bd_pins interconnect_cpu/S00_ARESETN]
 connect_bd_net -net $sys_cpu_resetn [get_bd_pins interconnect_cpu/M00_ARESETN]
 connect_bd_net -net $sys_cpu_resetn [get_bd_pins interconnect_cpu/M01_ARESETN]
-connect_bd_net -net $sys_cpu_resetn [get_bd_pins interconnect_cpu/M02_ARESETN]
+connect_bd_net -net $sys_stream_resetn [get_bd_pins interconnect_cpu/M02_ARESETN]
 
 connect_bd_intf_net [get_bd_intf_pins zynq_ultra_ps_e_0/M_AXI_HPM0_LPD] [get_bd_intf_pins interconnect_cpu/S00_AXI]
 
